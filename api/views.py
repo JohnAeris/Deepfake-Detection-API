@@ -10,6 +10,9 @@ import os
 from django.conf import settings
 from facenet_pytorch import MTCNN
 import torch
+from tensorflow import keras
+from keras.models import load_model
+from .classifier import PositionalEmbedding, TransformerEncoder
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 detector = MTCNN(select_largest=False, post_process=False, device=device)
@@ -48,7 +51,32 @@ def addVideo(request):
 
         optical_flow = compute_optical_flow_all(extracted_frames)
         print('Optical Flow Shape: {}'.format(optical_flow.shape))
+
+        feature_extraction = load_model('api/resnet50-feature-extraction-network.h5')
+        feature_extraction.compile(loss='binary_crossentropy', optimizer='adam')
+
+        features = feature_extraction.predict(optical_flow)
+        print('Features: {}'.format(features.shape))
+    
+        features_reshaped = features.reshape((-1, 48, 2048))
+        print('Features reshaped: {}'.format(features_reshaped.shape))
+
+        model = load_model('api/model.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
         
+        class_labels = ['fake', 'real']
+        class_encoding = {0: 'fake', 1: 'real'}
+
+        predictions = model.predict(optical_flow)
+        print(f'Prediction Array: {predictions}')
+
+        # Get predicted class label
+        predicted_label_index = np.argmax(predictions)
+        predicted_label = class_encoding[predicted_label_index]
+        confidence_level = np.max(predictions) * 100
+
+        pred_label = class_labels[np.argmax(predictions)]
+        print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
+
         return Response({"message": "Video is being processed"})
 
     else:
@@ -92,16 +120,15 @@ def getFrame(video, num_frame):
 
     return npframes
 
-def compute_optical_flow(frames, frame_index_1, frame_index_2, i):
-    # Convert numpy array to list of frames
-    frame_list = [np.array(frames[i]) for i in range(50)]
-    # Convert frame indices to zero-based index
+def compute_optical_flow(frame_index_1, frame_index_2, i):
     try:
         frame1 = cv2.resize(frame_index_1, (224, 224), interpolation=cv2.INTER_LINEAR)
         frame2 = cv2.resize(frame_index_2, (224, 224), interpolation=cv2.INTER_LINEAR)
 
-        print(frame_index_1.shape)
-        
+        # print(f'Frame shape {frame_index_1.shape}')
+        frame1 = frame1.astype(np.uint8)
+        frame2 = frame2.astype(np.uint8)
+
         gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
         gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
         
@@ -129,6 +156,7 @@ def compute_optical_flow(frames, frame_index_1, frame_index_2, i):
         diff = cv2.absdiff(frame1, frame2_masked)
         diff = cv2.resize(diff, (224, 224), interpolation=cv2.INTER_LINEAR)
         diff = cv2.applyColorMap(diff * 255, cv2.COLORMAP_JET)
+        # print(diff.shape)
         cv2.imwrite('D:/Deepfake-Detection-Api/media/' +  str(i) + '.jpg', diff)
         
         return diff
@@ -144,7 +172,7 @@ def compute_optical_flow_all(frames):
         # print(frames[i].shape)
         # print(i)
         try:
-            flow = compute_optical_flow(frames, frames[i], frames[i+1], i)
+            flow = compute_optical_flow(frames[i], frames[i+1], i)
             flows.append(flow)
             # print(flow.shape)
         except IndexError:
