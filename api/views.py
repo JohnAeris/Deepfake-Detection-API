@@ -51,7 +51,8 @@ def addVideo(request):
     
         # capture = cv2.VideoCapture(video_path)
 
-        # video_classification, video_confidence = video_detection_model(video_path)
+        video_classification, video_confidence = video_detection_model(video_path)
+        print(f"c: {video_classification} ({video_confidence:.2f}%)")
 
         clip = mp.VideoFileClip(video_path)
     
@@ -60,9 +61,9 @@ def addVideo(request):
             melspectogram(audio_path)
         except AttributeError:
             return Response({"message": "No Audio"})
-
-
-        return Response({"message": "Video is being processed"})
+    
+        return Response({"video_classification": video_classification,
+                         "video_confidence_level": video_confidence})
 
     else:
         # Return an error response if the serializer is not valid
@@ -141,8 +142,7 @@ def compute_optical_flow(frame_index_1, frame_index_2, i):
         diff = cv2.absdiff(frame1, frame2_masked)
         diff = cv2.resize(diff, (224, 224), interpolation=cv2.INTER_LINEAR)
         diff = cv2.applyColorMap(diff * 255, cv2.COLORMAP_JET)
-        # print(diff.shape)
-        cv2.imwrite('D:/Deepfake-Detection-Api/media/' +  str(i) + '.jpg', diff)
+        # cv2.imwrite(settings.MEDIA_ROOT +  str(i) + '.jpg', diff)
         
         return diff
     
@@ -187,8 +187,8 @@ def video_detection_model(video_path):
     class_labels = ['fake', 'real']
     class_encoding = {0: 'fake', 1: 'real'}
 
-    predictions = model.predict(optical_flow)
-    print(f'Prediction Array: {predictions}')
+    predictions = model.predict(features_reshaped)
+    # print(f'Prediction Array: {predictions}')
 
     # Get predicted class label
     predicted_label_index = np.argmax(predictions)
@@ -196,9 +196,9 @@ def video_detection_model(video_path):
     confidence_level = np.max(predictions) * 100
 
     pred_label = class_labels[np.argmax(predictions)]
-    print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
+    # print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
 
-    return video_path, confidence_level
+    return predicted_label, confidence_level
 
 def melspectogram(audio):
     n_fft = 2048
@@ -232,7 +232,7 @@ def melspectogram(audio):
         plt.tight_layout()
 
         # Save plot as PNG image
-        output_path = os.path.join(settings.MEDIA_ROOT, os.path.splitext(audio)[0] + '_mel.png')
+        output_path = os.path.join(settings.MEDIA_ROOT, '/', os.path.splitext(audio)[0] + '_mel.png')
         plt.savefig(output_path, dpi=300)
 
         # Print file name
