@@ -41,8 +41,8 @@ def addVideo(request):
             video_classification, video_confidence = video_detection_model(video_path)
             print(f"c: {video_classification} ({video_confidence:.2f}%)")
         except ValueError:
-            video_classification = "Invalid"
-            video_confidence = "- -%"
+            video_classification = "No Face Detected"
+            video_confidence = 00.0
 
         clip = mp.VideoFileClip(video_path)
     
@@ -51,8 +51,8 @@ def addVideo(request):
             mel_spectogram = melspectogram(audio_path)
             audio_classification, audio_confidence = audio_detection_model(mel_spectogram)
         else:
-            audio_classification = "No Audio"
-            audio_confidence =  "No Audio"
+            audio_classification = "No Audio Detected"
+            audio_confidence =  00.0
     
         return Response({"video_classification": video_classification,
                          "video_confidence_level": video_confidence,
