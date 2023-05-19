@@ -7,6 +7,8 @@ import torch
 from keras.models import load_model
 from .classifier import PositionalEmbedding, TransformerEncoder
 import numpy as np
+from . import config
+import os
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 detector = MTCNN(select_largest=False, post_process=False, device=device)
@@ -115,7 +117,7 @@ def video_detection_model(video_path):
     optical_flow = compute_optical_flow_all(extracted_frames)
     print('Optical Flow Shape: {}'.format(optical_flow.shape))
 
-    feature_extraction = load_model('api/resnet50-feature-extraction-network.h5')
+    feature_extraction = load_model(os.environ.get('feature-extraction-network'))
     feature_extraction.compile(loss='binary_crossentropy', optimizer='adam')
 
     features = feature_extraction.predict(optical_flow)
@@ -124,7 +126,7 @@ def video_detection_model(video_path):
     features_reshaped = features.reshape((-1, 48, 2048))
     print('Features reshaped: {}'.format(features_reshaped.shape))
 
-    model = load_model('api/Celeb-DF-v2_resnet50_50_890-C10_EP100_SL49_ED2048_DD2048_NH8_86.24.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
+    model = load_model(os.environ.get('vision-transformer-classifier'), custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
     
     class_labels = ['fake', 'real']
     class_encoding = {0: 'fake', 1: 'real'}
