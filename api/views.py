@@ -37,10 +37,12 @@ def addVideo(request):
         video_path = os.path.join(settings.MEDIA_ROOT, path)
         audio_path = os.path.join(settings.MEDIA_ROOT, 'audio.wav')
     
-        # capture = cv2.VideoCapture(video_path)
-
-        video_classification, video_confidence = video_detection_model(video_path)
-        print(f"c: {video_classification} ({video_confidence:.2f}%)")
+        try:
+            video_classification, video_confidence = video_detection_model(video_path)
+            print(f"c: {video_classification} ({video_confidence:.2f}%)")
+        except ValueError:
+            video_classification = "Invalid"
+            video_confidence = "- -%"
 
         clip = mp.VideoFileClip(video_path)
     
