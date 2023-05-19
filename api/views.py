@@ -56,14 +56,16 @@ def addVideo(request):
 
         clip = mp.VideoFileClip(video_path)
     
-        try: 
+        if clip.audio is not None:
             clip.audio.write_audiofile(audio_path)
             melspectogram(audio_path)
-        except AttributeError:
-            return Response({"message": "No Audio"})
+            audio_classification = "Real"
+        else:
+            audio_classification = "No Audio"
     
         return Response({"video_classification": video_classification,
-                         "video_confidence_level": video_confidence})
+                         "video_confidence_level": video_confidence,
+                         "audio_classification": audio_classification})
 
     else:
         # Return an error response if the serializer is not valid
