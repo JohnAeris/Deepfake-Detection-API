@@ -18,6 +18,7 @@ import librosa
 import librosa.display
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 detector = MTCNN(select_largest=False, post_process=False, device=device)
@@ -58,14 +59,17 @@ def addVideo(request):
     
         if clip.audio is not None:
             clip.audio.write_audiofile(audio_path)
-            melspectogram(audio_path)
-            audio_classification = "Real"
+            mel_spectogram = melspectogram(audio_path)
+            audio_classification, audio_confidence = audio_detection_model(mel_spectogram)
         else:
             audio_classification = "No Audio"
+            audio_confidence =  "No Audio"
     
         return Response({"video_classification": video_classification,
                          "video_confidence_level": video_confidence,
-                         "audio_classification": audio_classification})
+                         "audio_classification": audio_classification,
+                         "audio_confidence_level": audio_confidence
+                         })
 
     else:
         # Return an error response if the serializer is not valid
@@ -237,8 +241,34 @@ def melspectogram(audio):
         output_path = os.path.join(settings.MEDIA_ROOT, '/', os.path.splitext(audio)[0] + '_mel.png')
         plt.savefig(output_path, dpi=300)
 
+        img = Image.open(output_path).convert('RGB')
+        img = img.resize((224, 224))
+        img = np.array(img)
+        img = np.expand_dims(img, axis=0)
+
+        print(f'Spectogram {img.shape}')
+
+        return img
+
         # Print file name
         print(audio + ' ---------- Done')
 
     except Exception as e:
         print(audio + ' ---------- Failed')
+    
+def audio_detection_model(melspectogram):
+
+    class_encoding = {0: 'fake', 1: 'real'}
+
+    model = load_model('api/ResNet50_16_94.57.h5')
+    predictions = model.predict(melspectogram)
+    
+    # Get predicted class label
+    predicted_label_index = np.argmax(predictions)
+    predicted_label = class_encoding[predicted_label_index]
+    confidence_level = np.max(predictions) * 100
+
+    # print(f"Audio Predicted class: {predicted_label} ({confidence_level:.2f}%)")
+    
+    return predicted_label, confidence_level
+    
