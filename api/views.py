@@ -46,36 +46,8 @@ def addVideo(request):
         # print('test')
         # capture = cv2.VideoCapture(video_path)
 
-        extracted_frames = getFrame(video_path, 50)
-        print('Numer of frames: {}'.format(extracted_frames.shape))
+        video_classification, video_confidence = video_detection_model(video_path)
 
-        optical_flow = compute_optical_flow_all(extracted_frames)
-        print('Optical Flow Shape: {}'.format(optical_flow.shape))
-
-        feature_extraction = load_model('api/resnet50-feature-extraction-network.h5')
-        feature_extraction.compile(loss='binary_crossentropy', optimizer='adam')
-
-        features = feature_extraction.predict(optical_flow)
-        print('Features: {}'.format(features.shape))
-    
-        features_reshaped = features.reshape((-1, 48, 2048))
-        print('Features reshaped: {}'.format(features_reshaped.shape))
-
-        model = load_model('api/model.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
-        
-        class_labels = ['fake', 'real']
-        class_encoding = {0: 'fake', 1: 'real'}
-
-        predictions = model.predict(optical_flow)
-        print(f'Prediction Array: {predictions}')
-
-        # Get predicted class label
-        predicted_label_index = np.argmax(predictions)
-        predicted_label = class_encoding[predicted_label_index]
-        confidence_level = np.max(predictions) * 100
-
-        pred_label = class_labels[np.argmax(predictions)]
-        print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
 
         return Response({"message": "Video is being processed"})
 
@@ -179,3 +151,38 @@ def compute_optical_flow_all(frames):
             pass
     flows = np.array(flows)
     return np.array(flows)
+
+def video_detection_model(video_path):
+
+    extracted_frames = getFrame(video_path, 50)
+    print('Numer of frames: {}'.format(extracted_frames.shape))
+
+    optical_flow = compute_optical_flow_all(extracted_frames)
+    print('Optical Flow Shape: {}'.format(optical_flow.shape))
+
+    feature_extraction = load_model('api/resnet50-feature-extraction-network.h5')
+    feature_extraction.compile(loss='binary_crossentropy', optimizer='adam')
+
+    features = feature_extraction.predict(optical_flow)
+    print('Features: {}'.format(features.shape))
+
+    features_reshaped = features.reshape((-1, 48, 2048))
+    print('Features reshaped: {}'.format(features_reshaped.shape))
+
+    model = load_model('api/Vgg_EP100_SL49_ED512_DD2048_NH32_90.17.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
+    
+    class_labels = ['fake', 'real']
+    class_encoding = {0: 'fake', 1: 'real'}
+
+    predictions = model.predict(optical_flow)
+    print(f'Prediction Array: {predictions}')
+
+    # Get predicted class label
+    predicted_label_index = np.argmax(predictions)
+    predicted_label = class_encoding[predicted_label_index]
+    confidence_level = np.max(predictions) * 100
+
+    pred_label = class_labels[np.argmax(predictions)]
+    print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
+
+    return video_path, confidence_level
