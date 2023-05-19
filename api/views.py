@@ -13,6 +13,11 @@ import torch
 from tensorflow import keras
 from keras.models import load_model
 from .classifier import PositionalEmbedding, TransformerEncoder
+import moviepy.editor as mp
+import librosa
+import librosa.display
+import numpy as np
+import matplotlib.pyplot as plt
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 detector = MTCNN(select_largest=False, post_process=False, device=device)
@@ -42,11 +47,19 @@ def addVideo(request):
 
         # Read the video file using OpenCV
         video_path = os.path.join(settings.MEDIA_ROOT, path)
-        print(video_path)
-        # print('test')
+        audio_path = os.path.join(settings.MEDIA_ROOT, 'audio.wav')
+    
         # capture = cv2.VideoCapture(video_path)
 
-        video_classification, video_confidence = video_detection_model(video_path)
+        # video_classification, video_confidence = video_detection_model(video_path)
+
+        clip = mp.VideoFileClip(video_path)
+    
+        try: 
+            clip.audio.write_audiofile(audio_path)
+            melspectogram(audio_path)
+        except AttributeError:
+            return Response({"message": "No Audio"})
 
 
         return Response({"message": "Video is being processed"})
@@ -169,7 +182,7 @@ def video_detection_model(video_path):
     features_reshaped = features.reshape((-1, 48, 2048))
     print('Features reshaped: {}'.format(features_reshaped.shape))
 
-    model = load_model('api/Vgg_EP100_SL49_ED512_DD2048_NH32_90.17.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
+    model = load_model('api/Celeb-DF-v2_resnet50_50_890-C10_EP100_SL49_ED2048_DD2048_NH8_86.24.h5', custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
     
     class_labels = ['fake', 'real']
     class_encoding = {0: 'fake', 1: 'real'}
@@ -186,3 +199,44 @@ def video_detection_model(video_path):
     print(f"Predicted class: {predicted_label} ({confidence_level:.2f}%)")
 
     return video_path, confidence_level
+
+def melspectogram(audio):
+    n_fft = 2048
+    hop_length = 512
+    n_mels = 128
+    duration = 2
+    y, sr = librosa.load(audio, duration=duration)
+    
+    # Validate if file is corrupted or not
+    try:
+        if len(y) < duration:
+            y = librosa.util.fix_length(y, sr*duration)
+
+        # Compute mel-spectrogram
+        spectrogram = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels)
+        log_spectrogram = librosa.amplitude_to_db(spectrogram, ref=np.max)
+
+        # Pad mel-spectrogram if shorter than 2 seconds
+        spec_len = log_spectrogram.shape[1]
+        if spec_len < 2 * sr // hop_length:
+            pad_width = 2 * sr // hop_length - spec_len
+            log_spectrogram = np.pad(log_spectrogram, ((0, 0), (pad_width // 2, pad_width - pad_width // 2)), mode='constant', constant_values=-80)
+            
+        if len(y) == 0 or spec_len == 0:
+            raise ValueError('File has no duration or is corrupted')
+        
+        # Plot mel-spectrogram
+        plt.figure(figsize=(10, 4))
+        plt.axis('off')
+        librosa.display.specshow(log_spectrogram, sr=sr, hop_length=hop_length, x_axis='time', y_axis='mel')
+        plt.tight_layout()
+
+        # Save plot as PNG image
+        output_path = os.path.join(settings.MEDIA_ROOT, os.path.splitext(audio)[0] + '_mel.png')
+        plt.savefig(output_path, dpi=300)
+
+        # Print file name
+        print(audio + ' ---------- Done')
+
+    except Exception as e:
+        print(audio + ' ---------- Failed')
