@@ -12,6 +12,7 @@ import librosa.display
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+from . import config
 
 def melspectogram(audio):
     n_fft = 2048
@@ -67,7 +68,7 @@ def audio_detection_model(melspectogram):
 
     class_encoding = {0: 'fake', 1: 'real'}
 
-    model = load_model('api/ResNet50_16_94.57.h5')
+    model = load_model(os.environ.get('audio-classifier'))
     predictions = model.predict(melspectogram)
     
     # Get predicted class label
