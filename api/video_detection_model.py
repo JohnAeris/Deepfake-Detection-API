@@ -69,19 +69,12 @@ def compute_optical_flow(frame_index_1, frame_index_2, i):
         magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
 
         # Threshold the magnitude to create a binary mask of moving regions
-        magnitude_threshold = 1
+        magnitude_threshold = 5
         magnitude = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         ret, mask = cv2.threshold(magnitude, magnitude_threshold, 1, cv2.THRESH_BINARY)
 
-        # Perform erosion to remove small noise or artifacts
-        kernel = np.ones((5, 5), np.uint8)
-        mask_eroded = cv2.erode(mask, kernel, iterations=1)
-
-        # Perform dilation to fill gaps in the motion mask
-        mask_dilated = cv2.dilate(mask_eroded, kernel, iterations=1)
-
         # Apply the mask to the second frame to highlight the moving regions
-        frame2_masked = cv2.bitwise_and(frame2, frame2, mask=mask_dilated)
+        frame2_masked = cv2.bitwise_and(frame2, frame2, mask=mask)
 
         diff = cv2.absdiff(frame1, frame2_masked)
         diff = cv2.resize(diff, (224, 224), interpolation=cv2.INTER_LINEAR)
@@ -123,7 +116,7 @@ def video_detection_model(video_path):
     features = feature_extraction.predict(optical_flow)
     print('Features: {}'.format(features.shape))
 
-    features_reshaped = features.reshape((-1, 48, 2048))
+    features_reshaped = features.reshape((-1, 48, 512))
     print('Features reshaped: {}'.format(features_reshaped.shape))
 
     model = load_model(os.environ.get('vision-transformer-classifier'), custom_objects={"PositionalEmbedding": PositionalEmbedding, "TransformerEncoder": TransformerEncoder})
